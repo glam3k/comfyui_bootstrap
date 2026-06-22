@@ -7,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 SKIP_ALL_DOWNLOADS = False
 MAX_WORKERS = 8
-PIP_EXTRA = "--break-system-packages"
 
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
@@ -16,6 +15,9 @@ CIVITAI_API_KEY = os.getenv("CIVITAI_API_KEY", "")
 
 ROOT_DIR = os.getcwd()
 COMFY_DIR = os.path.join(ROOT_DIR, "ComfyUI")
+VENV_DIR = os.path.join(ROOT_DIR, ".venv")
+VENV_PYTHON = os.path.join(VENV_DIR, "bin", "python3")
+VENV_PIP = os.path.join(VENV_DIR, "bin", "pip")
 
 MODELS_TO_INGEST = {
     "checkpoints": [
@@ -39,8 +41,16 @@ def run_cmd(cmd, cwd=None, env_update=None):
     subprocess.run(cmd, shell=True, check=True, cwd=cwd, env=current_env)
 
 
+def ensure_venv():
+    if not os.path.exists(VENV_DIR):
+        run_cmd("python3 -m venv .venv")
+        print("Virtual environment created at .venv")
+    else:
+        print("Virtual environment .venv already exists")
+
+
 def pip_install(pkg, cwd=None):
-    run_cmd(f"pip install {PIP_EXTRA} {pkg}", cwd=cwd)
+    run_cmd(f"{VENV_PIP} install {pkg}", cwd=cwd)
 
 
 def download_worker(task):
@@ -85,8 +95,11 @@ def download_worker(task):
 def main():
     print("Bootstrapping ComfyUI environment...")
 
+    # Step 0: Create virtual environment
+    ensure_venv()
+
     # Step 1: System dependencies
-    run_cmd("apt-get update && apt-get install -y git wget curl build-essential")
+    run_cmd("apt-get update && apt-get install -y git wget curl build-essential python3-venv")
     pip_install("-U pip ninja wheel setuptools 'huggingface_hub[cli]'")
 
     # Hugging Face login
@@ -109,7 +122,7 @@ def main():
                 "NVCC_APPEND_FLAGS": "--threads 8",
                 "MAX_JOBS": "32"
             }
-            run_cmd("python3 setup.py install", cwd=sage_dir, env_update=compilation_env)
+            run_cmd(f"{VENV_PYTHON} setup.py install", cwd=sage_dir, env_update=compilation_env)
             print("SageAttention installed.")
         except Exception as e:
             print(f"SageAttention build failed (non-fatal): {e}")
@@ -166,7 +179,7 @@ def main():
     # Step 5: Launch
     print("Setup complete. Launching ComfyUI...")
     launch_args = "--listen 127.0.0.1 --port 8188 --use-sage-attention --enable-manager --enable-manager-legacy-ui"
-    run_cmd(f"python3 main.py {launch_args}", cwd=COMFY_DIR)
+    run_cmd(f"{VENV_PYTHON} main.py {launch_args}", cwd=COMFY_DIR)
 
 
 if __name__ == "__main__":

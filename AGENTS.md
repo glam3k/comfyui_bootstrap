@@ -15,11 +15,13 @@ Single-file bootstrap script (`bootstrap.sh`) for deploying ComfyUI on cloud GPU
 - SageAttention is built from source (non-fatal if it fails)
 - Server launches with `--enable-manager --enable-manager-legacy-ui`
 
+## Virtual environment
+- Creates `./.venv` automatically at first run
+- All Python deps install into the venv (does not touch system Python)
+- ComfyUI launches from inside the venv
+
 ## Running
 ```bash
 sudo python3 bootstrap.py           # run directly
 sudo bash -c "$(curl -fsSL <url> | python3)"  # piped from remote
 ```
-
-## PEP 668 (externally-managed-environment)
-The script passes `--break-system-packages` to all pip commands via the `PIP_EXTRA` variable. This is safe for ephemeral cloud instances. On systems where this flag is not needed, change `PIP_EXTRA = ""`.
