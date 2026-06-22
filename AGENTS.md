@@ -17,6 +17,9 @@ Single-file bootstrap script (`bootstrap.sh`) for deploying ComfyUI on cloud GPU
 
 ## Running
 ```bash
-sudo bash bootstrap.sh           # run directly
-sudo bash -c "$(curl -fsSL <url>)"  # piped from remote
+sudo python3 bootstrap.py           # run directly
+sudo bash -c "$(curl -fsSL <url> | python3)"  # piped from remote
 ```
+
+## PEP 668 (externally-managed-environment)
+The script passes `--break-system-packages` to all pip commands via the `PIP_EXTRA` variable. This is safe for ephemeral cloud instances. On systems where this flag is not needed, change `PIP_EXTRA = ""`.

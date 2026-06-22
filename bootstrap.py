@@ -1,17 +1,4 @@
-#!/bin/bash
-# """
-# =========================================================================
-# BASH BOOTSTRAPPER (Allows executing this file directly via bash or curl)
-# =========================================================================
-if ! command -v python3 &>/dev/null; then
-    apt-get update && apt-get install -y python3 python3-pip python3-venv
-fi
-exec python3 -x "$0" "$@"
-# """
-
-# =========================================================================
-# GLOBAL ENVIRONMENT CONFIGURATION (Now executing natively in Python)
-# =========================================================================
+#!/usr/bin/env python3
 import os
 import sys
 import subprocess
@@ -20,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 SKIP_ALL_DOWNLOADS = False
 MAX_WORKERS = 8
+PIP_EXTRA = "--break-system-packages"
 
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
@@ -29,7 +17,6 @@ CIVITAI_API_KEY = os.getenv("CIVITAI_API_KEY", "")
 ROOT_DIR = os.getcwd()
 COMFY_DIR = os.path.join(ROOT_DIR, "ComfyUI")
 
-# DYNAMIC MODEL MAP MATRIX
 MODELS_TO_INGEST = {
     "checkpoints": [
         ("https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors", False),
@@ -44,16 +31,16 @@ MODELS_TO_INGEST = {
 }
 
 
-# =========================================================================
-# EXECUTION ENGINE LOGIC
-# =========================================================================
-
 def run_cmd(cmd, cwd=None, env_update=None):
     print(f"Running: {cmd}")
     current_env = os.environ.copy()
     if env_update:
         current_env.update(env_update)
     subprocess.run(cmd, shell=True, check=True, cwd=cwd, env=current_env)
+
+
+def pip_install(pkg, cwd=None):
+    run_cmd(f"pip install {PIP_EXTRA} {pkg}", cwd=cwd)
 
 
 def download_worker(task):
@@ -100,7 +87,7 @@ def main():
 
     # Step 1: System dependencies
     run_cmd("apt-get update && apt-get install -y git wget curl build-essential")
-    run_cmd("pip install -U pip ninja wheel setuptools 'huggingface_hub[cli]'")
+    pip_install("-U pip ninja wheel setuptools 'huggingface_hub[cli]'")
 
     # Hugging Face login
     if HF_TOKEN:
@@ -130,11 +117,11 @@ def main():
     # Step 2: ComfyUI
     if not os.path.exists(COMFY_DIR):
         run_cmd(f"git clone https://github.com/comfyanonymous/ComfyUI.git {COMFY_DIR}")
-    run_cmd("pip install -r requirements.txt", cwd=COMFY_DIR)
+    pip_install("-r requirements.txt", cwd=COMFY_DIR)
 
     manager_reqs = os.path.join(COMFY_DIR, "manager_requirements.txt")
     if os.path.exists(manager_reqs):
-        run_cmd("pip install -r manager_requirements.txt", cwd=COMFY_DIR)
+        pip_install("-r manager_requirements.txt", cwd=COMFY_DIR)
 
     # Step 3: Custom nodes
     custom_nodes_path = os.path.join(COMFY_DIR, "custom_nodes")
@@ -155,13 +142,13 @@ def main():
     vhs_path = os.path.join(custom_nodes_path, "ComfyUI-VideoHelperSuite")
     if not os.path.exists(vhs_path):
         run_cmd("git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git", cwd=custom_nodes_path)
-    run_cmd("pip install -r requirements.txt", cwd=vhs_path)
+    pip_install("-r requirements.txt", cwd=vhs_path)
 
     # Workflow Models Downloader
     downloader_node = os.path.join(custom_nodes_path, "ComfyUI-Workflow-Models-Downloader")
     if not os.path.exists(downloader_node):
         run_cmd("git clone https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader.git", cwd=custom_nodes_path)
-    run_cmd("pip install -r requirements.txt", cwd=downloader_node)
+    pip_install("-r requirements.txt", cwd=downloader_node)
 
     # Step 4: Model downloads
     if SKIP_ALL_DOWNLOADS:
