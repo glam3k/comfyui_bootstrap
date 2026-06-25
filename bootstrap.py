@@ -92,17 +92,21 @@ def download_worker(task):
         print(f"[WARN] Download failed for models/{folder_type}: {e}")
 
 
+def fix_permissions():
+    original_user = os.environ.get("SUDO_USER") or os.environ.get("USER", "")
+    if original_user and original_user != "root":
+        run_cmd(f"chown -R {original_user}:{original_user} {ROOT_DIR}")
+        print(f"Permissions fixed for user: {original_user}")
+
+
 def main():
     print("Bootstrapping ComfyUI environment...")
 
-    # Step 0: Create virtual environment
     ensure_venv()
 
-    # Step 1: System dependencies
     run_cmd("apt-get update && apt-get install -y git wget curl build-essential python3-venv")
     pip_install("-U pip ninja wheel setuptools 'huggingface_hub[cli]'")
 
-    # Hugging Face login
     if HF_TOKEN:
         os.environ["HF_TOKEN"] = HF_TOKEN
         try:
@@ -111,7 +115,6 @@ def main():
         except Exception as e:
             print(f"HF login failed (non-fatal): {e}")
 
-    # SageAttention
     sage_dir = os.path.join(ROOT_DIR, "SageAttention")
     if not os.path.exists(sage_dir):
         print("Building SageAttention...")
@@ -127,7 +130,6 @@ def main():
         except Exception as e:
             print(f"SageAttention build failed (non-fatal): {e}")
 
-    # Step 2: ComfyUI
     if not os.path.exists(COMFY_DIR):
         run_cmd(f"git clone https://github.com/comfyanonymous/ComfyUI.git {COMFY_DIR}")
     pip_install("-r requirements.txt", cwd=COMFY_DIR)
@@ -136,11 +138,9 @@ def main():
     if os.path.exists(manager_reqs):
         pip_install("-r manager_requirements.txt", cwd=COMFY_DIR)
 
-    # Step 3: Custom nodes
     custom_nodes_path = os.path.join(COMFY_DIR, "custom_nodes")
     os.makedirs(custom_nodes_path, exist_ok=True)
 
-    # Civitai token
     if CIVITAI_API_KEY:
         manager_config_dir = os.path.join(custom_nodes_path, "ComfyUI-Manager")
         os.makedirs(manager_config_dir, exist_ok=True)
@@ -151,19 +151,16 @@ def main():
         except Exception as e:
             print(f"Failed to write Civitai token: {e}")
 
-    # VideoHelperSuite
     vhs_path = os.path.join(custom_nodes_path, "ComfyUI-VideoHelperSuite")
     if not os.path.exists(vhs_path):
         run_cmd("git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git", cwd=custom_nodes_path)
     pip_install("-r requirements.txt", cwd=vhs_path)
 
-    # Workflow Models Downloader
     downloader_node = os.path.join(custom_nodes_path, "ComfyUI-Workflow-Models-Downloader")
     if not os.path.exists(downloader_node):
         run_cmd("git clone https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader.git", cwd=custom_nodes_path)
     pip_install("-r requirements.txt", cwd=downloader_node)
 
-    # Step 4: Model downloads
     if SKIP_ALL_DOWNLOADS:
         print("Global download skip active.")
     else:
@@ -176,9 +173,10 @@ def main():
             with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                 executor.map(download_worker, download_tasks)
 
-    # Step 5: Launch
+    fix_permissions()
+
     print("Setup complete. Launching ComfyUI...")
-    launch_args = "--listen 127.0.0.1 --port 8188 --use-sage-attention --enable-manager --enable-manager-legacy-ui"
+    launch_args = "--listen --port 8188 --use-sage-attention --enable-manager --enable-manager-legacy-ui"
     run_cmd(f"{VENV_PYTHON} main.py {launch_args}", cwd=COMFY_DIR)
 
 
