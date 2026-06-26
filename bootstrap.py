@@ -32,13 +32,37 @@ MODELS_TO_INGEST = {
     "loras": []
 }
 
+PLUGINS = [
+    ("ComfyUI-Manager", "https://github.com/ltdrdata/ComfyUI-Manager.git", None),
+    ("SageAttention", "https://github.com/thu-ml/SageAttention.git", "sageattention"),
+    ("ComfyUI-VideoHelperSuite", "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git", None),
+    ("ComfyUI-Workflow-Models-Downloader", "https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader.git", None),
+    ("ComfyUI-Model-Installer", "https://github.com/arleckk/ComfyUI-Model-Installer.git", None),
+]
 
-def run_cmd(cmd, cwd=None, env_update=None):
+
+def run_cmd(cmd, cwd=None, env_update=None, check=False):
     print(f"Running: {cmd}")
     current_env = os.environ.copy()
     if env_update:
         current_env.update(env_update)
-    subprocess.run(cmd, shell=True, check=True, cwd=cwd, env=current_env)
+    result = subprocess.run(cmd, shell=True, cwd=cwd, env=current_env)
+    if check and result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, cmd)
+    return result
+
+
+def run_cmd_list(cmd_list, cwd=None, env_update=None):
+    current_env = os.environ.copy()
+    if env_update:
+        current_env.update(env_update)
+    return subprocess.run(cmd_list, cwd=cwd, env=current_env, capture_output=True)
+
+
+def check_sudo():
+    if os.geteuid() != 0:
+        print("Error: This script requires sudo privileges. Run with 'sudo python3 bootstrap.py'")
+        sys.exit(1)
 
 
 def ensure_venv():
@@ -50,7 +74,19 @@ def ensure_venv():
 
 
 def pip_install(pkg, cwd=None):
-    run_cmd(f"{VENV_PIP} install {pkg}", cwd=cwd)
+    run_cmd(f"{VENV_PIP} install {pkg}", cwd=cwd, check=True)
+
+
+def check_package_installed(package):
+    return run_cmd_list([VENV_PYTHON, "-c", f"import {package}"]).returncode == 0
+
+
+def ensure_git_repo(name, url, target_dir, env_update=None):
+    if not os.path.exists(target_dir):
+        print(f"Cloning {name}...")
+        run_cmd(f"git clone --depth 1 {url} {target_dir}", env_update=env_update, check=True)
+    else:
+        print(f"{name} already cloned")
 
 
 def download_worker(task):
@@ -99,12 +135,39 @@ def fix_permissions():
         print(f"Permissions fixed for user: {original_user}")
 
 
+def install_plugin(plugin_entry):
+    name, url, package_name = plugin_entry
+    if name == "SageAttention":
+        if check_package_installed("sageattention"):
+            print(f"{name} already installed.")
+            return
+        target_dir = os.path.join(ROOT_DIR, name)
+        ensure_git_repo(name, url, target_dir)
+        compilation_env = {
+            "EXT_PARALLEL": "4",
+            "NVCC_APPEND_FLAGS": "--threads 8",
+            "MAX_JOBS": "32"
+        }
+        try:
+            run_cmd(f"{VENV_PYTHON} setup.py install", cwd=target_dir, env_update=compilation_env, check=True)
+            print(f"{name} installed.")
+        except Exception as e:
+            print(f"{name} build failed (non-fatal): {e}")
+    else:
+        target_dir = os.path.join(COMFY_DIR, "custom_nodes", name)
+        ensure_git_repo(name, url, target_dir)
+        req_file = os.path.join(target_dir, "requirements.txt")
+        if os.path.exists(req_file):
+            pip_install("-r requirements.txt", cwd=target_dir)
+
+
 def main():
     print("Bootstrapping ComfyUI environment...")
 
+    check_sudo()
     ensure_venv()
 
-    run_cmd("apt-get update && apt-get install -y git wget curl build-essential python3-venv")
+    run_cmd("apt-get update && apt-get install -y git wget curl build-essential python3-venv", check=True)
     pip_install("-U pip ninja wheel setuptools 'huggingface_hub[cli]'")
 
     if HF_TOKEN:
@@ -115,23 +178,8 @@ def main():
         except Exception as e:
             print(f"HF login failed (non-fatal): {e}")
 
-    sage_dir = os.path.join(ROOT_DIR, "SageAttention")
-    if not os.path.exists(sage_dir):
-        print("Building SageAttention...")
-        try:
-            run_cmd(f"git clone https://github.com/thu-ml/SageAttention.git {sage_dir}")
-            compilation_env = {
-                "EXT_PARALLEL": "4",
-                "NVCC_APPEND_FLAGS": "--threads 8",
-                "MAX_JOBS": "32"
-            }
-            run_cmd(f"{VENV_PYTHON} setup.py install", cwd=sage_dir, env_update=compilation_env)
-            print("SageAttention installed.")
-        except Exception as e:
-            print(f"SageAttention build failed (non-fatal): {e}")
-
     if not os.path.exists(COMFY_DIR):
-        run_cmd(f"git clone https://github.com/comfyanonymous/ComfyUI.git {COMFY_DIR}")
+        run_cmd(f"git clone https://github.com/comfyanonymous/ComfyUI.git {COMFY_DIR}", check=True)
     pip_install("-r requirements.txt", cwd=COMFY_DIR)
 
     manager_reqs = os.path.join(COMFY_DIR, "manager_requirements.txt")
@@ -141,8 +189,14 @@ def main():
     custom_nodes_path = os.path.join(COMFY_DIR, "custom_nodes")
     os.makedirs(custom_nodes_path, exist_ok=True)
 
+    for plugin in PLUGINS:
+        try:
+            install_plugin(plugin)
+        except Exception as e:
+            print(f"Failed to install {plugin[0]}: {e}")
+
     if CIVITAI_API_KEY:
-        manager_config_dir = os.path.join(custom_nodes_path, "ComfyUI-Manager")
+        manager_config_dir = os.path.join(COMFY_DIR, "custom_nodes", "ComfyUI-Manager")
         os.makedirs(manager_config_dir, exist_ok=True)
         try:
             with open(os.path.join(manager_config_dir, "civitai_token.txt"), "w") as f:
@@ -150,16 +204,6 @@ def main():
             print("Civitai token written.")
         except Exception as e:
             print(f"Failed to write Civitai token: {e}")
-
-    vhs_path = os.path.join(custom_nodes_path, "ComfyUI-VideoHelperSuite")
-    if not os.path.exists(vhs_path):
-        run_cmd("git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git", cwd=custom_nodes_path)
-    pip_install("-r requirements.txt", cwd=vhs_path)
-
-    downloader_node = os.path.join(custom_nodes_path, "ComfyUI-Workflow-Models-Downloader")
-    if not os.path.exists(downloader_node):
-        run_cmd("git clone https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader.git", cwd=custom_nodes_path)
-    pip_install("-r requirements.txt", cwd=downloader_node)
 
     if SKIP_ALL_DOWNLOADS:
         print("Global download skip active.")
@@ -176,7 +220,9 @@ def main():
     fix_permissions()
 
     print("Setup complete. Launching ComfyUI...")
-    launch_args = "--listen --port 8188 --use-sage-attention --enable-manager --enable-manager-legacy-ui"
+    launch_args = "--listen --port 8188 --enable-manager --enable-manager-legacy-ui"
+    if check_package_installed("sageattention"):
+        launch_args += " --use-sage-attention"
     run_cmd(f"{VENV_PYTHON} main.py {launch_args}", cwd=COMFY_DIR)
 
 
