@@ -20,15 +20,9 @@ VENV_PYTHON = os.path.join(VENV_DIR, "bin", "python3")
 VENV_PIP = os.path.join(VENV_DIR, "bin", "pip")
 
 MODELS_TO_INGEST = {
-    "checkpoints": [
-        ("https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors", False),
-    ],
-    "diffusion_models": [
-        ("huggingface-cli download Kijai/WanVideo_comfy InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors --local-dir .", False),
-    ],
-    "vae": [
-        ("https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors", False),
-    ],
+    "checkpoints": [],
+    "diffusion_models": [],
+    "vae": [],
     "loras": []
 }
 
