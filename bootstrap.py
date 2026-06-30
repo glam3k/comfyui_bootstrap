@@ -161,7 +161,8 @@ def main():
     check_sudo()
     ensure_venv()
 
-    run_cmd("apt-get update && apt-get install -y git wget curl build-essential python3-venv", check=True)
+    run_cmd("apt-get update && apt-get install -y git wget curl build-essential python3-venv ufw", check=True)
+    run_cmd("ufw allow 8188", check=False)
     pip_install("-U pip ninja wheel setuptools 'huggingface_hub[cli]'")
 
     if HF_TOKEN:
