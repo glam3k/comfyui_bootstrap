@@ -1,0 +1,3 @@
+git clone https://github.com/glam3k/comfyui_bootstrap.git
+cd comfyui_bootstrap
+sudo python3 bootstrap.py
