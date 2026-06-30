@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import argparse
 import subprocess
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
@@ -156,13 +157,18 @@ def install_plugin(plugin_entry):
 
 
 def main():
-    print("Bootstrapping ComfyUI environment...")
+    parser = argparse.ArgumentParser(description="Bootstrap ComfyUI")
+    parser.add_argument("--port", type=int, default=8188, help="Port to run ComfyUI on (default: 8188)")
+    args = parser.parse_args()
+
+    print(f"Bootstrapping ComfyUI environment on port {args.port}...")
+
 
     check_sudo()
     ensure_venv()
 
     run_cmd("apt-get update && apt-get install -y git wget curl build-essential python3-venv ufw", check=True)
-    run_cmd("ufw allow 8188", check=False)
+    run_cmd(f"ufw allow {args.port}", check=False)
     pip_install("-U pip ninja wheel setuptools 'huggingface_hub[cli]'")
 
     if HF_TOKEN:
@@ -215,7 +221,7 @@ def main():
     fix_permissions()
 
     print("Setup complete. Launching ComfyUI...")
-    launch_args = "--listen --port 8188 --enable-manager --enable-manager-legacy-ui"
+    launch_args = f"--listen --port {args.port} --enable-manager --enable-manager-legacy-ui"
     if check_package_installed("sageattention"):
         launch_args += " --use-sage-attention"
     run_cmd(f"{VENV_PYTHON} main.py {launch_args}", cwd=COMFY_DIR)
