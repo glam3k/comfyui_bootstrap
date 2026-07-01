@@ -3,4 +3,4 @@ cd comfyui_bootstrap
 sudo python3 bootstrap.py --port 8188
 
 # Or use the one-line curl installer:
-curl -fsSL https://gist.githubusercontent.com/glam3k/3893ed6258659ce288b779388d9ebdaf/raw | bash -s -- 8188
+curl -fsSL https://raw.githubusercontent.com/glam3k/comfyui_bootstrap/main/install.sh | bash -s -- 8188
