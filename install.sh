@@ -9,7 +9,7 @@ DIR_NAME="comfyui_bootstrap"
 
 # Check for essential dependencies
 check_deps() {
-    local deps=("python3" "git" "curl" "wget" "ufw")
+    local deps=("python3" "git" "curl")
     for dep in "${deps[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
             echo "Missing dependency: $dep. Installing..."
