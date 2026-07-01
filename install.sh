@@ -9,11 +9,14 @@ DIR_NAME="comfyui_bootstrap"
 
 # Check for essential dependencies
 check_deps() {
-    local deps=("python3" "git" "curl")
+    local deps=("python3" "git" "curl" "wget" "ufw")
     for dep in "${deps[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
             echo "Missing dependency: $dep. Installing..."
-            sudo apt-get update && sudo apt-get install -y "$dep"
+            sudo apt-get update && sudo apt-get install -y "$dep" || {
+                echo "Failed to install $dep. Please install it manually."
+                exit 1
+            }
         fi
     done
 }
