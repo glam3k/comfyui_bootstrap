@@ -7,13 +7,19 @@ PORT=${1:-8188}
 REPO_URL="https://github.com/glam3k/comfyui_bootstrap.git"
 DIR_NAME="comfyui_bootstrap"
 
-echo "Starting ComfyUI Bootstrap installation..."
+# Check for essential dependencies
+check_deps() {
+    local deps=("python3" "git" "curl")
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            echo "Missing dependency: $dep. Installing..."
+            sudo apt-get update && sudo apt-get install -y "$dep"
+        fi
+    done
+}
 
-# Install git if not present
-if ! command -v git &> /dev/null; then
-    echo "Installing git..."
-    sudo apt-get update && sudo apt-get install -y git
-fi
+echo "Starting ComfyUI Bootstrap installation..."
+check_deps
 
 # Clone the repository
 if [ ! -d "$DIR_NAME" ]; then
